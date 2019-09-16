@@ -138,7 +138,7 @@ final_steps_rf = [
 
 final_steps_xgb = [
                ('preprocess', preprocs),
-               ('xgb', xgb.XGBClassifier(objective="binary:logistic"))
+               ('xgb', xgb.XGBClassifier(objective="binary:logistic", booster="dart"))
                 ]
 
 #CART
@@ -199,7 +199,9 @@ print(classification_report(y_test, LR_pred))
 xgb_grid = {'xgb__learning_rate': [0.01, 0.15, 0.02, 0.03, 0.05],
             'xgb__n_estimators': [int(x) for x in np.linspace(start=10, stop=50, num=20)],
             'xgb__max_depth':  [int(x) for x in np.linspace(start=2, stop=10, num=8, endpoint=True)],
-            'xgb__random_state': [21]}
+            'xgb__random_state': [21]
+            # , 'xgb__gamma': [0, 0.05, 0.1, 0.5, 1, 10]
+            }
 
 pipeline_xgb = Pipeline(steps=final_steps_xgb)
 xgb_cv = GridSearchCV(estimator=pipeline_xgb, param_grid=xgb_grid, cv=5, n_jobs=-1)
