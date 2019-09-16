@@ -82,7 +82,7 @@ train.groupby(['Fare_bin', 'Fare'])['Fare'].count()
 train[['SibSp', 'S_group']].head()
 
 #X = train.drop(['Survived', 'Name', 'PassengerId'], axis=1)
-X = train.drop(['Survived', 'Name', 'PassengerId', 'SibSp', 'Parch', 'S_group', 'P_group'], axis=1)
+X = train.drop(['Survived', 'Name', 'PassengerId'], axis=1)
 y = train['Survived']
 
 X = train.drop(['Survived', 'Name'], axis=1)
@@ -94,16 +94,16 @@ y = train['Survived']
 
 
 # Splitting data into train and test
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.4)
 
 print(X_train.columns.values)
 # Feature processing
-num_vars = ['Age', 'Fare']
+num_vars = ['Age', 'Fare', 'SibSp', 'Parch']
 num_steps = [('num_impute', SimpleImputer(strategy='median')),
              ('scaler', StandardScaler())]
 num_transform = Pipeline(steps=num_steps)
 
-cat_vars = ['Pclass', 'Sex', 'Embarked', 'T_group']
+cat_vars = ['Pclass', 'Sex', 'Embarked', 'T_group', 'S_group', 'P_group']
 cat_steps = [('cat_impute', SimpleImputer(strategy='most_frequent')),
              ("ohe", OneHotEncoder())]
 cat_transform = Pipeline(steps=cat_steps)
@@ -196,7 +196,23 @@ LR_pred = pipeline_lr.predict(X_test)
 print(classification_report(y_test, LR_pred))
 
 # XGBOOST
+xgb_grid = {'xgb__learning_rate': [0.01, 0.15, 0.02, 0.03, 0.05],
+            'xgb__n_estimators': [int(x) for x in np.linspace(start=10, stop=50, num=20)],
+            'xgb__max_depth':  [int(x) for x in np.linspace(start=2, stop=10, num=8, endpoint=True)],
+            'xgb__random_state': [21]}
+
 pipeline_xgb = Pipeline(steps=final_steps_xgb)
+xgb_cv = GridSearchCV(estimator=pipeline_xgb, param_grid=xgb_grid, cv=5, n_jobs=-1)
+xgb_cv.fit(X_train, y_train)
+
+best_xgb = xgb_cv.best_estimator_
+best_xgb_params = xgb_cv.best_params_
+best_xgb_score = xgb_cv.best_score_
+
+print(best_xgb)
+print(best_xgb_params)
+print(best_xgb_score)
+print(xgb_cv.score(X_test, y_test))
 pipeline_xgb.fit(X_train, y_train)
 xgb_pred = pipeline_xgb.predict(X_test)
 
@@ -253,7 +269,8 @@ print(cart_ensemble_cv.best_score_)
 ensemble_answer = ensembled.predict(test)
 cart_ensemble_answer = cart_ensemble_cv.predict(test)
 logistic_answer = model_1.predict(test)
-xgb_answer = pipeline_xgb.predict(test)
+#xgb_answer = pipeline_xgb.predict(test)
+xgb_answer = xgb_cv.predict(test)
 cart_answer = best_cart.predict(test)
 cart_manual = cart_pipe2.predict(test)
 rf_answer = best_rf.predict(test)
