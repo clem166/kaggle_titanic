@@ -12,11 +12,13 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import train_test_split, GridSearchCV,cross_val_score
 from sklearn.ensemble import RandomForestClassifier, VotingClassifier
 import xgboost as xgb
+import seaborn as sns
 #CART graphing
 #from subprocess import call
 from sklearn.externals.six import StringIO
 from IPython.display import Image
 import pydotplus
+
 
 #set seed
 random.seed(54)
@@ -29,10 +31,58 @@ train = pd.read_csv("C:/Users/theGameTrader/Documents/Python Scripts/Titanic Kag
 
 log_reg = LogisticRegression()
 
-
+train.columns
+train.head()
 train.groupby('Parch')['Age'].nunique()
+train.describe()
 
-X = train.drop(['Survived', 'Name', 'PassengerId'], axis=1)
+f, axes = plt.subplots(1, 2)
+sns.barplot(x='SibSp', y='Survived', data=train , hue='Sex', ax=axes[0])
+sns.barplot(x='Parch', y='Survived', data=train , hue='Sex', ax=axes[1])
+
+#if train['SibSp'] == 0:
+#    train['S_group'] = "No Sib/Sp"
+#elif ((train['SibSp'] > 0) & (train['SibSp'] <= 2)):
+#    train['S_group'] = "Small Sib/Sp"
+#elif train['SibSp'] > 2:
+#    train['S_group'] = "Large Sib/Sp"
+
+#Sibling and spouse group
+train['S_group'] = np.where(train['SibSp'] == 0, "No Sib/Sp", np.where(train['SibSp'] > 2, "Large Sib/Sp", "Small Sib/Sp"))
+train.groupby(['SibSp', 'S_group'])['SibSp'].count()
+
+#Parents and children group
+train['P_group'] = np.where(train['Parch'] == 0, "No Pa/Ch", np.where(train['Parch'] > 3, "Large Pa/Ch", "Small Pa/Ch"))
+train.groupby(['P_group', 'Parch'])['Parch'].count()
+
+#combined
+
+train['Tot_Fam'] = train['SibSp'] + train['Parch']
+#train['T_group'] = np.where(train['Tot_Fam'] == 0, "No Fam", np.where(train['Tot_Fam'] > 3, "Large Fam", "Small Fam"))
+train['T_group'] = np.where(train['Tot_Fam'] == 0, "No Fam", "Fam")
+
+
+
+sns.barplot(x='Tot_Fam', y='Survived', data=train, hue='Sex')
+
+#Fare check
+sns.boxplot(x='Sex', y='Fare', data=train, hue='Survived')
+
+train['Fare'].describe()
+train.groupby(['Sex', 'Survived'])['Fare'].mean()
+
+train['Fare_bin'] = pd.cut(train['Fare'], [10, 20, 30, 40, 50])
+train.groupby(['Fare_bin', 'Fare'])['Fare'].count()
+
+
+#train['S_group'] = (train['SibSp'] == 0).map({True: "No Sib/Sp"})
+#train['S_group'] = ((train['SibSp'] > 0) & (train['SibSp'] <= 2)).map({True: "Small Sib/Sp"})
+#train['S_group'] = (train['SibSp'] > 2).map({True: "Large Sib/Sp"})
+
+train[['SibSp', 'S_group']].head()
+
+#X = train.drop(['Survived', 'Name', 'PassengerId'], axis=1)
+X = train.drop(['Survived', 'Name', 'PassengerId', 'SibSp', 'Parch', 'S_group', 'P_group'], axis=1)
 y = train['Survived']
 
 X = train.drop(['Survived', 'Name'], axis=1)
@@ -53,7 +103,7 @@ num_steps = [('num_impute', SimpleImputer(strategy='median')),
              ('scaler', StandardScaler())]
 num_transform = Pipeline(steps=num_steps)
 
-cat_vars = ['Pclass', 'Sex', 'Embarked']
+cat_vars = ['Pclass', 'Sex', 'Embarked', 'T_group']
 cat_steps = [('cat_impute', SimpleImputer(strategy='most_frequent')),
              ("ohe", OneHotEncoder())]
 cat_transform = Pipeline(steps=cat_steps)
@@ -160,7 +210,7 @@ print("XGBoost: ", pipeline_xgb.score(X_test, y_test))
 ensembled = VotingClassifier(estimators=[
                             ('lr', model_1),
                             ('CART', best_cart),
-                            ('xgb', pipeline_xgb),
+#                            ('xgb', pipeline_xgb),
                             ('rf', best_rf)
                             ],
                             voting='hard'
@@ -205,6 +255,7 @@ cart_ensemble_answer = cart_ensemble_cv.predict(test)
 logistic_answer = model_1.predict(test)
 xgb_answer = pipeline_xgb.predict(test)
 cart_answer = best_cart.predict(test)
+cart_manual = cart_pipe2.predict(test)
 rf_answer = best_rf.predict(test)
 
 
@@ -213,6 +264,7 @@ cart_ensemble_answer2 = np.column_stack((test['PassengerId'], cart_ensemble_answ
 logistic_answer2 = np.column_stack((test['PassengerId'], logistic_answer))
 xgb_answer2 = np.column_stack((test['PassengerId'], xgb_answer))
 cart_answer2 = np.column_stack((test['PassengerId'], cart_answer))
+cart_manual2 = np.column_stack((test['PassengerId'], cart_manual))
 rf_answer2 = np.column_stack((test['PassengerId'], rf_answer))
 
 
@@ -221,6 +273,7 @@ cart_ensemble_answer3 = pd.DataFrame({'PassengerId': cart_ensemble_answer2[:, 0]
 logistic_answer3 = pd.DataFrame({'PassengerId': logistic_answer2[:, 0], 'Survived': logistic_answer2[:, 1]})
 xgb_answer3 = pd.DataFrame({'PassengerId': xgb_answer2[:, 0], 'Survived': xgb_answer2[:, 1]})
 cart_answer3 = pd.DataFrame({'PassengerId': cart_answer2[:, 0], 'Survived': cart_answer2[:, 1]})
+cart_manual3 = pd.DataFrame({'PassengerId': cart_manual2[:, 0], 'Survived': cart_manual2[:, 1]})
 rf_answer3 = pd.DataFrame({'PassengerId': rf_answer2[:, 0], 'Survived': rf_answer2[:, 1]})
 
 pd.DataFrame(ensemble_answer3).to_csv("C:/Users/theGameTrader/Documents/Python Scripts/Titanic Kaggle/predictions/ensemble_pred.csv", index=False)
@@ -228,6 +281,7 @@ pd.DataFrame(cart_ensemble_answer3).to_csv("C:/Users/theGameTrader/Documents/Pyt
 pd.DataFrame(logistic_answer3).to_csv("C:/Users/theGameTrader/Documents/Python Scripts/Titanic Kaggle/predictions/logistic_pred.csv", index=False)
 pd.DataFrame(xgb_answer3).to_csv("C:/Users/theGameTrader/Documents/Python Scripts/Titanic Kaggle/predictions/xgb_pred.csv", index=False)
 pd.DataFrame(cart_answer3).to_csv("C:/Users/theGameTrader/Documents/Python Scripts/Titanic Kaggle/predictions/cart.csv", index=False)
+pd.DataFrame(cart_manual3).to_csv("C:/Users/theGameTrader/Documents/Python Scripts/Titanic Kaggle/predictions/cart manual.csv", index=False)
 pd.DataFrame(rf_answer3).to_csv("C:/Users/theGameTrader/Documents/Python Scripts/Titanic Kaggle/predictions/rf.csv", index=False)
 
 # WIP
